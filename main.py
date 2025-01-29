@@ -2,6 +2,9 @@
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 
+engine = create_engine("mysql+pymysql://flaskuser:new_password@localhost:3306/dbname")
+
+
 app = Flask(__name__)
 
 # Configure MySQL Database
