@@ -1,7 +1,7 @@
 CREATE DATABASE claims_db;
 
 DROP USER IF EXISTS 'flaskuser'@'localhost';
-CREATE USER 'flaskuser'@'localhost' IDENTIFIED BY 'password';
+CREATE USER 'flaskuser'@'localhost' IDENTIFIED BY 'new_password';
 GRANT ALL PRIVILEGES ON claims_db.* TO 'flaskuser'@'localhost';
 FLUSH PRIVILEGES;
 
