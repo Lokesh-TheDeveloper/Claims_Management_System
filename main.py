@@ -1,93 +1,62 @@
-# policy with coverage amount 
-class Policy:
-    def __init__(self, policy_id, policyholder, coverage_amount):
-        self.policy_id = policy_id
-        self.policyholder = policyholder
-        self.coverage_amount = coverage_amount
-
-
-
-class Policyholder:
-    def __init__(self, holder_id, name):
-        self.holder_id = holder_id
-        self.name = name
-
-class Claim:
-    def __init__(self, claim_id, policy_id, amount, status="Pending"):
-        self.claim_id = claim_id
-        self.policy_id = policy_id
-        self.amount = amount
-        self.status = status
-
-
-# CRUD FUCNTIONS FOR POLICYHOLDER
-class ClaimsManager:
-    def __init__(self):
-        self.claims = {}  # Stores claims in memory
-
-    def create_claim(self, claim_id, policy_id, amount, policy):
-        if amount > policy.coverage_amount:
-            return "Claim amount exceeds policy coverage!"
-        self.claims[claim_id] = Claim(claim_id, policy_id, amount)
-        return f"Claim {claim_id} created!"
-
-    def get_claim(self, claim_id):
-        return self.claims.get(claim_id, "Claim not found")
-
-    def update_claim(self, claim_id, new_status):
-        if claim_id in self.claims:
-            self.claims[claim_id].status = new_status
-            return f"Claim {claim_id} updated!"
-        return "Claim not found"
-
-    def delete_claim(self, claim_id):
-        return self.claims.pop(claim_id, "Claim not found")
-
-
-
-
-def validate_claim(claim_id, amount, policy, claims_manager):
-    if claim_id in claims_manager.claims:
-        return "Claim ID already exists!"
-    if amount > policy.coverage_amount:
-        return "Claim amount exceeds policy limit!"
-    return None
-
-
-
-
-# API Creation
 
 from flask import Flask, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
 
-app = Flask(__name__)     # Initializes a Flask application instance named app.
+app = Flask(__name__)
 
+# Configure MySQL Database
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://flaskuser:password@localhost/claims_db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Now we need something to store data 
+db = SQLAlchemy(app)
 
+# Database Models
+class Policyholder(db.Model):
+    __tablename__ = 'policyholders'
+    holder_id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
 
+class Policy(db.Model):
+    __tablename__ = 'policies'
+    policy_id = db.Column(db.Integer, primary_key=True)
+    policyholder_id = db.Column(db.Integer, db.ForeignKey('policyholders.holder_id'))
+    coverage_amount = db.Column(db.Float, nullable=False)
 
-claims_manager = ClaimsManager()
+class Claim(db.Model):
+    __tablename__ = 'claims'
+    claim_id = db.Column(db.Integer, primary_key=True)
+    policy_id = db.Column(db.Integer, db.ForeignKey('policies.policy_id'))
+    amount = db.Column(db.Float, nullable=False)
+    status = db.Column(db.String(50), default='Pending')
 
-@app.route("/claim", methods=["POST"])     # This registers an endpoint (/claim) that listens for POST requests to create a new claim.
-def create_claim():                        #Defines the function that handles the POST request for creating claims
+# API Routes
+
+# ➤ Create a Claim
+@app.route('/claim', methods=['POST'])
+def create_claim():
     data = request.json
-    policy = Policy(data["policy_id"], "John Doe", 10000)  # Example policy
-    validation_error = validate_claim(data["claim_id"], data["amount"], policy, claims_manager)
-    
-    if validation_error:
-        return jsonify({"error": validation_error}), 400    # 400 htp bad response code
+    policy = Policy.query.get(data['policy_id'])
+    if not policy:
+        return jsonify({"error": "Invalid policy ID"}), 400
+    if data['amount'] > policy.coverage_amount:
+        return jsonify({"error": "Claim exceeds policy limit"}), 400
 
-    response = claims_manager.create_claim(data["claim_id"], data["policy_id"], data["amount"], policy)   #Calls create_claim() from ClaimsManager to store the claim in memory.
-    return jsonify({"message": response})
+    new_claim = Claim(policy_id=data['policy_id'], amount=data['amount'])
+    db.session.add(new_claim)
+    db.session.commit()
+    return jsonify({"message": "Claim created successfully!"})
 
-
-@app.route("/claim/<claim_id>", methods=["GET"])
+# ➤ Get Claim by ID
+@app.route('/claim/<int:claim_id>', methods=['GET'])
 def get_claim(claim_id):
-    claim = claims_manager.get_claim(int(claim_id))
-    return jsonify({"claim": vars(claim) if claim != "Claim not found" else claim})
+    claim = Claim.query.get(claim_id)
+    return jsonify(vars(claim)) if claim else jsonify({"error": "Claim not found"}), 404
 
-if __name__ == "__main__":  #ensures the script runs only when executed directly (not when imported as a module).
-    app.run(debug=True)   #Auto-reloading on code changes.
+# Initialize Database
+with app.app_context():
+    db.create_all()
+
+if __name__ == "__main__":
+    app.run(debug=True)
 
 
