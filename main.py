@@ -57,3 +57,24 @@ with app.app_context():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
+
+
+
+@app.route('/claim', methods=['POST'])
+def create_claim():
+    try:
+        data = request.json
+        policy = Policy.query.get(data['policy_id'])
+        if not policy:
+            return jsonify({"error": "Invalid policy ID"}), 400
+        if data['amount'] > policy.coverage_amount:
+            return jsonify({"error": "Claim exceeds policy limit"}), 400
+
+        new_claim = Claim(policy_id=data['policy_id'], amount=data['amount'])
+        db.session.add(new_claim)
+        db.session.commit()
+        return jsonify({"message": "Claim created successfully!"})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
